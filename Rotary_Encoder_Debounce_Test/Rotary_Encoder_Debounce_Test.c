@@ -51,13 +51,11 @@ void init_switches()
 
 ISR (TIMER0_OVF_vect)
 {
-	//PORTC ^= (1 << PC2);
-	
-	// Timer2が起動中でなければPin Change Interruptを有効化
-	/*
-	if (TCNT2 == 0)
-		PCICR = (1 << PCIE0) | (1 << PCIE2);
-	*/
+	// Timer0停止
+	TCCR0B = 0x00;
+
+	// 割り込みごとにLEDを点滅（デバッグ用）
+	PORTC ^= (1 << PC2);
 }
 
 ISR (TIMER2_OVF_vect)
@@ -65,10 +63,10 @@ ISR (TIMER2_OVF_vect)
 	uint8_t rd;
 	
 	// Timer2停止
-	TCCR2B = 0x00;	// Timer2停止
+	TCCR2B = 0x00;
 	
 	// 割り込みごとにLEDを点滅（デバッグ用）
-	PORTC ^= (1 << PC2);
+	PORTC ^= (1 << PC3);
 	
 	rd = PINB;
 	rd = (rd & 0b00001100) >> 2;
@@ -102,13 +100,8 @@ void pin_change_interrupt_handler()
 	// Pin Change Interruptを無効化
 	PCICR = 0x00;
 	
-	// 割り込みごとにLEDを点滅（デバッグ用）
-	PORTC ^= (1 << PC3);
-	
 	rd = PINB;
 	re_index_rd = (rd & 0b00001100) >> 2;
-	
-	//PORTD = PINB;
 	
 	// Timer0を起動
 	//TCCR0B = 0x07;	// プリスケーラ：1024
@@ -128,41 +121,6 @@ ISR (PCINT2_vect)
 {
 	pin_change_interrupt_handler();
 }
-
-/*------------------------------------------------------------------------/
- * Rotary Encoder
- *
- ------------------------------------------------------------------------*/
-// 戻り値: ロータリーエンコーダーの回転方向
-//         0:変化なし 1:時計回り -1:反時計回り
-//
-/*
-int8_t readRE(void)
-{
-	static uint8_t index;
-	int8_t retVal = 0;
-	
-	index = (index << 2) | (RE_PIN & _BV(RE_A)) | (RE_PIN & _BV(RE_B));
-	index &= 0b1111;
-	
-	switch (index) {
-		// 時計回り
-		case 0b0001:	// 00 -> 01
-		case 0b1110:	// 11 -> 10
-		retVal = 1;
-		break;
-		// 反時計回り
-		case 0b0010:	// 00 -> 10
-		case 0b1101:	// 11 -> 01
-		retVal = -1;
-		break;
-	}
-	
-	_delay_ms(2);	// (とりあえず)チャタリング防止
-	
-	return retVal;
-}
-*/
 
 int main(void)
 {
@@ -201,16 +159,6 @@ int main(void)
     while(1)
     {
 		PORTD = re_data;
-		//PORTD = re_index_rd;
-		
-		/*
-		if (PCICR) {
-			PORTB |= (1 << PB5);
-		} else {
-			PORTB &= ~(1 << PB5);			
-		}
-		*/
-		
 	}
 }
 	
