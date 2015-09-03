@@ -27,15 +27,9 @@
 
 #include <stdint.h>
 
-// Rotary Encoder
-volatile uint8_t re_data;
-volatile uint8_t re_index;
-volatile uint8_t re_index_rd;
-
+// Rotary Encoder SW
 volatile uint8_t re_sw;
-volatile uint8_t re_sw_prev;
 volatile uint8_t re_sw_rd;
-volatile uint8_t re_sw_prev_rd;
 
 void init_switches()
 {
@@ -43,91 +37,45 @@ void init_switches()
 	PCICR = (1 << PCIE0) | (1 << PCIE2);
 	//PCMSK0 = 0b11000001;	// PORTB
 	//PCMSK2 = 0b00111111;	// PORTD
-	PCMSK0 = 0b00001110;
+	PCMSK0 = 0b00010010;
 	
 	// TIMER0 オーバーフロー割り込みの有効化
 	TCCR0B = 0x00;	// Timer0停止
 	TIMSK0 = (1 << TOIE0);
-	
-	// TIMER2 オーバーフロー割り込みの有効化
-	TCCR2B = 0x00;	// Timer2停止
-	TIMSK2 = (1 << TOIE2);
 }
 
 ISR (TIMER0_OVF_vect)
 {
-	// Timer0停止
-	TCCR0B = 0x00;
-
-	// 割り込みごとにLEDを点滅（デバッグ用）
-	PORTC ^= (1 << PC2);
-}
-
-ISR (TIMER2_OVF_vect)
-{
-	uint8_t rd;
-	
-	// Timer2停止
-	TCCR2B = 0x00;
-	
 	// 割り込みごとにLEDを点滅（デバッグ用）
 	PORTC ^= (1 << PC3);
 	
-	// Rotary Encoder SWトグル動作
-	if ((PINB & (1 << PB1)) == re_sw_rd)
-	{
-		re_sw++;
+	// Timer0停止
+	TCCR0B = 0x00;
+	
+	if (re_sw_rd == (~PINB & 0b00000010)) {
+		re_sw ^= re_sw_rd;
 	}
 	
-	/*	
-	// Rotary Encoder AB
-	rd = PINB;
-	rd = (rd & 0b00001100) >> 2;
-	
-	if (re_index_rd == rd) {
-		re_index = (re_index << 2) | rd;
-		re_index &= 0b1111;
-	
-		switch (re_index) {
-		// 時計回り
-		case 0b0001:	// 00 -> 01
-		case 0b1110:	// 11 -> 10
-			re_data++;
-			break;
-		// 反時計回り
-		case 0b0010:	// 00 -> 10
-		case 0b1101:	// 11 -> 01
-			re_data--;
-			break;
-		}
-	}
-	*/
-		
 	// Pin Change Interrupt有効化
 	PCICR = (1 << PCIE0) | (1 << PCIE2);
 }
 
 void pin_change_interrupt_handler()
 {
-	//uint8_t rd;
+	// 割り込みごとにLEDを点滅（デバッグ用）
+	PORTC ^= (1 << PC2);
 	
 	// Pin Change Interruptを無効化
 	PCICR = 0x00;
 	
-	// Rotary Encoder AB
-	//rd = PINB;
-	//re_index_rd = (PINB & 0b00001100) >> 2;
-	
-	// Rotary Encoder SW
-	re_sw_rd = PINB & (1 << PB1);
+	// Switches
+	re_sw_rd = (~PINB & 0b00010010);
 	
 	// Timer0を起動
-	//TCCR0B = 0x07;	// プリスケーラ：1024
-	//TCNT0 = 80;		// about: 10ms	
+	TCCR0B = 0x07;	// プリスケーラ－:1024, 1/(8MHz/1024)=128us
+	TCNT0 = 240;	// 128us*(256-240)=2048us
 	
-	// Timer2を起動
-	TCCR2B = 0x07;	// プリスケーラ－:1024, 1/(8MHz/1024)=128us
-	TCNT2 = 240;	// 128us*(256-240)=2048us
+	PORTC ^= (1 << PC3);
 }
 
 ISR (PCINT0_vect)
@@ -140,8 +88,50 @@ ISR (PCINT2_vect)
 	pin_change_interrupt_handler();
 }
 
+/*------------------------------------------------------------------------/
+ * Rotary Encoder
+ *
+ ------------------------------------------------------------------------*/
+// 戻り値: ロータリーエンコーダーの回転方向
+//         0:変化なし 1:時計回り -1:反時計回り
+//
+int8_t read_re(void)
+{
+	static uint8_t index;
+	int8_t ret_val = 0;
+	uint8_t rd;
+	
+	rd = ((PINB & 0b00001100) >> 2);
+	
+	_delay_ms(1);
+	
+	if (rd == ((PINB & 0b00001100) >> 2)) {
+		//PORTC ^= (1 << PC2);	// (デバッグ用)
+		
+		index = (index << 2) | rd;
+		index &= 0b1111;
+		
+		switch (index) {
+		// 時計回り
+		case 0b0001:	// 00 -> 01
+		case 0b1110:	// 11 -> 10
+			ret_val = 1;
+			break;
+		// 反時計回り
+		case 0b0010:	// 00 -> 10
+		case 0b1101:	// 11 -> 01
+			ret_val = -1;
+			break;
+		}	
+	}
+	
+	return ret_val;
+}
+
 int main(void)
 {
+	uint8_t re_count;
+	
 	DDRB = 0x00;
 	DDRC = 0x00;
 	DDRD = 0x00;
@@ -174,17 +164,20 @@ int main(void)
 		
 	sei();
 	
+	re_count = 0;
     while(1)
     {
+		re_count += read_re();
+		 
 		// Rotary Encoderのカウントを表示
-		PORTD = re_data;
+		PORTD = re_count;
 		
-		// Rotary EncoderのSWを表示
-		if ((re_sw >> 1) % 2) {
-			PORTB |= (1 << PB5);
+		// SWの状態を表示
+		if (re_sw) {
+			PORTB |= (re_sw << 4);
 		} else {
-			PORTB &= ~(1 << PB5);
-		}
+			PORTB &= ~(re_sw << 4);
+		}		
 	}
 }
 	
