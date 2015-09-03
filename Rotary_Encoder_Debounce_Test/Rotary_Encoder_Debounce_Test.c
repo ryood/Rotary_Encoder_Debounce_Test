@@ -62,14 +62,16 @@ ISR (TIMER0_OVF_vect)
 
 ISR (TIMER2_OVF_vect)
 {
+	uint8_t rd;
+	
 	// Timer2停止
 	TCCR2B = 0x00;	// Timer2停止
 	
 	// 割り込みごとにLEDを点滅（デバッグ用）
-	PORTC ^= (1 << PC3);
+	PORTC ^= (1 << PC2);
 	
-	/*
-	uint8_t rd = (PINB & (1 << PB2) >> 2)| (PINB & (1 << PB3) >> 2);
+	rd = PINB;
+	rd = (rd & 0b00001100) >> 2;
 	
 	if (re_index_rd == rd) {
 		re_index = (re_index << 2) | rd;
@@ -79,28 +81,32 @@ ISR (TIMER2_OVF_vect)
 		// 時計回り
 		case 0b0001:	// 00 -> 01
 		case 0b1110:	// 11 -> 10
-			re_data = 0x55;
+			re_data++;
 			break;
 		// 反時計回り
 		case 0b0010:	// 00 -> 10
 		case 0b1101:	// 11 -> 01
-			re_data = 0xaa;
+			re_data--;
 			break;
 		}
 	}
-	*/	
+		
+	// Pin Change Interrupt有効化
 	PCICR = (1 << PCIE0) | (1 << PCIE2);
 }
 
 void pin_change_interrupt_handler()
 {
+	uint8_t rd;
+	
 	// Pin Change Interruptを無効化
 	PCICR = 0x00;
 	
 	// 割り込みごとにLEDを点滅（デバッグ用）
 	PORTC ^= (1 << PC3);
 	
-	//re_index_rd = (PINB & (1 << PB2) >> 2)| (PINB & (1 << PB3) >> 2);
+	rd = PINB;
+	re_index_rd = (rd & 0b00001100) >> 2;
 	
 	//PORTD = PINB;
 	
@@ -194,8 +200,8 @@ int main(void)
 	
     while(1)
     {
-		//PORTD = re_data;
-		//PORTD = re_index;
+		PORTD = re_data;
+		//PORTD = re_index_rd;
 		
 		/*
 		if (PCICR) {
