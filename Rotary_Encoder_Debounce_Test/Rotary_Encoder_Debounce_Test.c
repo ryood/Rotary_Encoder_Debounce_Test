@@ -37,7 +37,7 @@ void init_switches()
 	PCICR = (1 << PCIE0) | (1 << PCIE2);
 	//PCMSK0 = 0b11000001;	// PORTB
 	//PCMSK2 = 0b00111111;	// PORTD
-	PCMSK0 = 0b00010010;
+	PCMSK0 = 0b00000010;
 	
 	// TIMER0 オーバーフロー割り込みの有効化
 	TCCR0B = 0x00;	// Timer0停止
@@ -72,10 +72,9 @@ void pin_change_interrupt_handler()
 	re_sw_rd = (~PINB & 0b00010010);
 	
 	// Timer0を起動
-	TCCR0B = 0x07;	// プリスケーラ－:1024, 1/(8MHz/1024)=128us
-	TCNT0 = 240;	// 128us*(256-240)=2048us
-	
-	PORTC ^= (1 << PC3);
+	TCCR0B = 0x05;	// プリスケーラ－:1024, 1/(8MHz/1024)=128us
+	//TCNT0 = 248;	// 128us*(256-248)=1024us
+	TCNT0 = 216;	// 128us*(256-216)=5120us
 }
 
 ISR (PCINT0_vect)
@@ -173,11 +172,10 @@ int main(void)
 		PORTD = re_count;
 		
 		// SWの状態を表示
-		if (re_sw) {
-			PORTB |= (re_sw << 4);
+		if (re_sw & (1 << PB1)) {
+			PORTB |= (1 << PB5);
 		} else {
-			PORTB &= ~(re_sw << 4);
+			PORTB &= ~(1 << PB5);
 		}		
 	}
 }
-	
