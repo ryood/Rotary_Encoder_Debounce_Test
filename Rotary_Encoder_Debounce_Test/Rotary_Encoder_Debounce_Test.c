@@ -32,6 +32,11 @@ volatile uint8_t re_data;
 volatile uint8_t re_index;
 volatile uint8_t re_index_rd;
 
+volatile uint8_t re_sw;
+volatile uint8_t re_sw_prev;
+volatile uint8_t re_sw_rd;
+volatile uint8_t re_sw_prev_rd;
+
 void init_switches()
 {
 	// Pin Change Interruptの有効化
@@ -68,6 +73,14 @@ ISR (TIMER2_OVF_vect)
 	// 割り込みごとにLEDを点滅（デバッグ用）
 	PORTC ^= (1 << PC3);
 	
+	// Rotary Encoder SWトグル動作
+	if ((PINB & (1 << PB1)) == re_sw_rd)
+	{
+		re_sw++;
+	}
+	
+	/*	
+	// Rotary Encoder AB
 	rd = PINB;
 	rd = (rd & 0b00001100) >> 2;
 	
@@ -88,6 +101,7 @@ ISR (TIMER2_OVF_vect)
 			break;
 		}
 	}
+	*/
 		
 	// Pin Change Interrupt有効化
 	PCICR = (1 << PCIE0) | (1 << PCIE2);
@@ -95,13 +109,17 @@ ISR (TIMER2_OVF_vect)
 
 void pin_change_interrupt_handler()
 {
-	uint8_t rd;
+	//uint8_t rd;
 	
 	// Pin Change Interruptを無効化
 	PCICR = 0x00;
 	
-	rd = PINB;
-	re_index_rd = (rd & 0b00001100) >> 2;
+	// Rotary Encoder AB
+	//rd = PINB;
+	//re_index_rd = (PINB & 0b00001100) >> 2;
+	
+	// Rotary Encoder SW
+	re_sw_rd = PINB & (1 << PB1);
 	
 	// Timer0を起動
 	//TCCR0B = 0x07;	// プリスケーラ：1024
@@ -109,7 +127,7 @@ void pin_change_interrupt_handler()
 	
 	// Timer2を起動
 	TCCR2B = 0x07;	// プリスケーラ－:1024, 1/(8MHz/1024)=128us
-	TCNT2 = 248;	// 128us*(256-248)=1024us
+	TCNT2 = 240;	// 128us*(256-240)=2048us
 }
 
 ISR (PCINT0_vect)
@@ -158,7 +176,15 @@ int main(void)
 	
     while(1)
     {
+		// Rotary Encoderのカウントを表示
 		PORTD = re_data;
+		
+		// Rotary EncoderのSWを表示
+		if ((re_sw >> 1) % 2) {
+			PORTB |= (1 << PB5);
+		} else {
+			PORTB &= ~(1 << PB5);
+		}
 	}
 }
 	
